@@ -29,16 +29,26 @@ $\square$ gitleaks
 Both ifconfig and ip are missing on the host. It's starting to seem like we are in a container, since we are limited by what we can run. Container enumeration is very similar to standard Linux enumeration. However, there are some additional things we should search for. For example, we should check the container for mounts that might contain secrets. We can list the mounts by reviewing the contents of /proc/mounts.
 
 Or : cat/proc/1/status | grep Cap
+
 jenkins@fcd3cc360d9e: 〜 cat/proc/1/status | grep Cap
+
 cat/proc/1/status | grep Cap
+
 CapInh: 000000000000000
+
 CapPrm: 0000003fffffffff
+
 CapEff: 0000003fffffffff
+
 CapBnd: 0000003fffffffff
+
 CapAmb: 0000000000000000
+
 The values in CapPrm, CapEff, and CapBnd represent the list of capabilities. However, they're
 currently encoded, so we'll have to decode them into something more useful. We can do this using Kali's capsh utility.
+
 kali@kali: "$ capsh --decode $=0000003fffffffff
+
 0x0000003fffffffff=cap_chown,cap_dac_override,cap_dac_read_search,cap_fowner,cap_fsetid,cap_ kill,cap_setgid,cap_setuid,cap_setpcap,cap_linux_immutable,cap_net_bind_service,cap_net_broadc ast,cap_net_admin,cap_net_raw,cap_ipc_lock,cap_ipc_owner,cap_sys_module,cap_sys_rawio,cap_ sys_chroot,cap_sys_ptrace,cap_sys_pacct,cap_sys_admin,cap_sys_boot,cap_sys_nice,cap_sys_resou rce,cap_sys_time,cap_sys_tty_config,cap_mknod,cap_lease,cap_audit_write,cap_audit_control,cap_ setfcap,cap_mac_override,cap_mac_admin,cap_syslog,cap_wake_alarm,cap_block_suspend,cap_au dit_read
 
 The presence of cap_net_admin and cap_sys_admin indicates that this container is either running in a privileged context or, at the very least, with all capabilities added.
