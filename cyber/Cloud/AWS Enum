@@ -1,0 +1,183 @@
+
+# CLOUD - AWS Enumeration
+
+## Introduction
+Pour identifier correctement des informations précieuses, il est essentiel d'avoir des objectifs clairs :
+- Recherche de vulnérabilités ?
+- Recherche d'informations métiers ?
+- Recherche d'inefficacités système ?
+- Besoin d'escalader les privilèges pour obtenir plus d'informations ?
+
+Avoir un objectif clair permet de se concentrer sur les données pertinentes.
+
+## Point de départ : DNS
+
+On commence par identifier les serveurs DNS qui contiennent les enregistrements pour le domaine :
+```bash
+host -t ns offseclab.io
+```
+
+Ensuite, on peut approfondir avec :
+```bash
+whois awsdns-00.com | grep "Registrant Organization"
+```
+
+On remarque que le service "Route 53" est utilisé ([lien vers AWS Route 53](https://aws.amazon.com/route53/)).
+
+Pour obtenir l'adresse IP du domaine :
+```bash
+host 52.70.117.69
+```
+
+Avec une recherche whois, on peut identifier que l'IP publique appartient à Amazon :
+```bash
+whois 52.70.117.69 | grep "OrgName"
+```
+
+Résultat :
+```
+OrgName: Amazon Technologies Inc.
+```
+
+Cela indique que la ressource est hébergée dans AWS (amazonaws.com) et qu'il s'agit d'une instance Amazon Elastic Compute Cloud (Amazon EC2).
+
+## Reconnaissance passive & OSINT
+
+Cette phase est récursive : chaque découverte (sous-domaine, IP publique, etc.) mène à une exploration plus approfondie.
+
+### Recherche de domaines
+On peut utiliser `dnsenum` pour énumérer les sous-domaines :
+```bash
+dnsenum offseclab.io --threads 100
+```
+
+### Identification des buckets S3
+En utilisant les outils de développement web (onglet réseau), on peut identifier des buckets S3 via les requêtes GET.
+
+Exemple :
+```
+from the path offseclab-assets-public-axevtewi/sites/www/images/amethyst.png
+```
+
+On peut déduire que le nom du bucket S3 est `offseclab-assets-public-axevtewi` et la clé de l'objet est `sites/www/images/ruby-expanded.png`.
+
+On peut essayer d'énumérer les noms de bucket avec des outils comme `cloudbrute` ou `cloud-enum` :
+```bash
+cloud_enum -k offseclab-assets-public-axevtewi --quickscan --disable-azure --disable-gcp
+```
+
+## Outils d'énumération
+
+| AWS | Azure | GCP |
+| :-- | :-- | :-- |
+| s3.amazonaws.com | web.core.windows.net | appspot.com |
+| awsapps.com | file.core.windows.net | storage.googleapis.com |
+|  | blob.core.windows.net |  |
+|  | azurewebsites.net |  |
+|  | cloudapp.net |  |
+
+## Reconnaissance via API
+
+### Ressources AWS
+- Publicly-shared Amazon Machine Images (AMIs)
+- Publicly-shared Elastic Block Storage (EBS) snapshots
+- Relational Databases (RDS) snapshots
+
+Ces ressources n'ont pas de noms DNS publics, donc on les cherche via l'API.
+
+#### Exemple de commandes pour énumérer les ressources :
+```bash
+aws --profile attacker ec2 describe-images --executable-users all --filters "Name=name,Values=*Offseclab*"
+```
+
+```bash
+aws --profile attacker ec2 describe-snapshots --filters "Name=description,Values=*offseclab*"
+```
+
+### Énumération des Account IDs
+
+1. Créer un utilisateur IAM sans permissions.
+2. Ajouter une politique pour accorder l'accès en lecture à un bucket S3, avec une condition sur l'ID du compte.
+3. Tester les valeurs de 0 à 9 pour identifier le premier chiffre de l'ID du compte.
+
+Exemple de politique :
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": "s3:ListBucket",
+      "Resource": "arn:aws:s3:::offseclab-assets-public-axevtewi",
+      "Condition": {
+        "StringLike": {
+          "aws:PrincipalAccount": ["${x}*"]
+        }
+      }
+    }
+  ]
+}
+```
+
+## Commandes utiles
+
+### Configuration du profil AWS
+```bash
+aws configure --profile attacker
+```
+
+### Création d'un utilisateur IAM
+```bash
+aws --profile attacker iam create-user --user-name enum
+```
+
+### Obtenir l'ID du compte
+```bash
+aws sts get-caller-identity --profile enum
+```
+
+### Exemple de politique pour énumérer les VPC
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": "ec2:DescribeVpcs",
+      "Resource": "*"
+    }
+  ]
+}
+```
+
+## Brute-force des permissions
+
+Si les identifiants compromis n'ont pas les privilèges pour interroger les informations IAM, on peut utiliser des outils comme `pacu`, `awsenum`, ou `enumerate-iam`.
+
+## Politiques de sécurité
+
+Les politiques AWS Managed Policies sont pratiques mais souvent trop permissives. Il est conseillé de les combiner avec des politiques plus restrictives.
+
+### Filtrer les résultats
+
+On peut utiliser `--filter` et `--query` pour filtrer les résultats :
+```bash
+aws --profile target iam get-account-authorization-details --filter User Group LocalManagedPolicy Role | tee account-authorization-details.json
+```
+
+### Exemple de requête JMESPath
+```bash
+aws --profile target iam get-account-authorization-details --filter User --query "UserDetailList[?contains(UserName, 'admin')].{Name: UserName}"
+```
+
+## Ressources utiles
+- [JMESPath Examples](https://jmespath.org/examples.html)
+- [AWS CLI User Guide - Filtering](https://docs.aws.amazon.com/cli/v1/userguide/cli-usage-filter.html)
+
+## Outils d'automatisation
+- **Cloudmapper** : Visualisation des configurations AWS.
+- **Awspx** : Analyse des ressources IAM.
+
+## Conclusion
+
+L'énumération des ressources AWS peut être fastidieuse, mais des outils automatisés comme Cloudmapper et Awspx facilitent l'analyse et la visualisation des données.
