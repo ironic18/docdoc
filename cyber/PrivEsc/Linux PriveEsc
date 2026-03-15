@@ -1,52 +1,227 @@
-Ressources:
-https://github.com/MattiaCossu/PE-Linux?tab=readme-ov-file#orgb49dfc0
+# Linux Privilege Escalation Notes
 
-ps axu pour voir les proces, qui les a lancé, with or without tty.
+## Ressources
 
-Voir les connexions réseau (il y a netstat aussi): ss –anp
+- https://github.com/MattiaCossu/PE-Linux?tab=readme-ov-file#orgb49dfc0
+- https://vulp3cula.gitbook.io/hackers-grimoire/post-exploitation/privesc-linux
+- https://gtfobins.github.io/
+- https://book.hacktricks.wiki/en/linux-hardening/privilege-escalation/index.html#sudo-and-suid
 
-Voir les taches cron planifiées: ls –lah /etc/cron*
+---
 
-Voir dans le fichier /etc/crontab le path pour voir si on peut "spoofer" un fichier grâce à l'ordre de considération des différents path (de gauche à droite je crois).
+# Enumeration de base
 
-Voir aussi les logs: grep "CRON" /var/log/cron.log
+## Processus
 
-Similaire au cron, il y a aussi des scripts exécutés périodiquement, les voir grâce à systemctl list-timers
+Voir les processus, l'utilisateur qui les a lancés et s'ils ont un TTY.
 
-Dans le pdf OWASP la partie Windows est pas mal, si besoin.
+```bash
+ps axu
+```
 
-Voir les appli installées: dpkg –l
+---
 
-Voir les répertoire où on peut écrire: find / -writable –type d 2> /dev/null
+## Connexions réseau
+
+Voir les connexions réseau :
+
+```bash
+ss -anp
+```
+
+Alternative :
+
+```bash
+netstat -anp
+```
+
+---
+
+## Tâches Cron
+
+Lister les tâches cron :
+
+```bash
+ls -lah /etc/cron*
+```
+
+Vérifier le PATH dans :
+
+```bash
+/etc/crontab
+```
+
+Objectif : voir si un **binaire peut être spoofé via l'ordre du PATH** (ordre gauche → droite).
+
+Voir les logs cron :
+
+```bash
+grep "CRON" /var/log/cron.log
+```
+
+---
+
+## Timers systemd
+
+Similaire aux cron :
+
+```bash
+systemctl list-timers
+```
+
+---
+
+## Applications installées
+
+Sur systèmes Debian / Ubuntu :
+
+```bash
+dpkg -l
+```
+
+---
+
+## Répertoires accessibles en écriture
+
+```bash
 find / -writable -type d 2>/dev/null
+```
 
+---
 
-Regarder mount et /etc/fstab pour voir si des choses intéressantes peuvent-être montées. lsblk pour voir les disques.
+## Disques et montages
 
+Voir les systèmes montés :
 
-Voir les loaded kernel modules : lsmod puis détailler les information sur ces modules: /sbin/modinfo libata
+```bash
+mount
+```
 
-Voir les fichiers avec le bit sudoer mis: find / -perm –u=s  -type f 2> /dev/null
-Et analyser ensuite ce qu'on peut faire grâce à https://gtfobins.github.io/
+Configuration des montages :
 
-Il y a des scripts qui font tout ça pour Windows et Linux ( ./unix-privesc-check standard > output.txt). Ces scripts sont sur github Un bon qui indique via des couleurs le niveau d'exploitation possible est Linpeas.
+```bash
+cat /etc/fstab
+```
 
-Exploit en fonction de l'architecture cible: voir page 570 du PDF. Cela consiste à compiler avec gcc sur la machine cible (encore faut-il pouvoir? Voir si autre chose que gcc).
+Lister les disques :
 
-Il y a aussi les pagers, voir 27.2.2. Le pager c'est le "!" Dans Vi par exemple qui permet d''éxecuter des commandes (ex: rechercher). Ici on fait par ex !/bin/bash si on est dans une commande sudo. Et hop, shell root.
+```bash
+lsblk
+```
 
-Un bon lien pour le priv esc: https://vulp3cula.gitbook.io/hackers-grimoire/post-exploitation/privesc-linux
+---
 
-Quelques trucs: sudo tcpdump -i lo -A | grep "pass" (-A pour formatter en ASCII)
+## Kernel Modules
 
-Monitorer les processes: watch -n 1 "ps -aux | grep pass"
+Modules chargés :
 
+```bash
+lsmod
+```
 
------------------Liste "usuelle" des SUID.
+Informations détaillées sur un module :
 
-Ici Debian:
+```bash
+/sbin/modinfo libata
+```
 
-joe@debian-privesc:~$ find / -perm -u=s -type f 2>/dev/null
+---
+
+# SUID / Privilege Escalation
+
+## Recherche des fichiers SUID
+
+```bash
+find / -perm -u=s -type f 2>/dev/null
+```
+
+Ensuite analyser les binaires via :
+
+https://gtfobins.github.io/
+
+---
+
+## Scripts d'automatisation
+
+Scripts qui automatisent l'énumération :
+
+### unix-privesc-check
+
+```bash
+./unix-privesc-check standard > output.txt
+```
+
+### LinPEAS
+
+Très bon script avec **indication couleur du niveau d'exploitation**.
+
+---
+
+# Exploits Kernel
+
+Selon l'architecture cible.
+
+Principe :
+
+1. Identifier version kernel
+2. Chercher exploit correspondant
+3. Compiler sur la machine cible
+
+```bash
+gcc exploit.c -o exploit
+```
+
+Attention : gcc doit être présent.
+
+Voir page **570 du PDF OWASP**.
+
+---
+
+# Pager Escapes
+
+Les **pagers** permettent parfois d'exécuter des commandes.
+
+Exemple dans **vi** :
+
+```
+!/bin/bash
+```
+
+Si exécuté dans un contexte `sudo`, cela peut donner un **shell root**.
+
+Voir section **27.2.2 du PDF**.
+
+---
+
+# Commandes utiles
+
+## Capture de mots de passe potentiels
+
+```bash
+sudo tcpdump -i lo -A | grep "pass"
+```
+
+`-A` : affichage ASCII.
+
+---
+
+## Monitoring de processus
+
+```bash
+watch -n 1 "ps -aux | grep pass"
+```
+
+---
+
+# Liste usuelle des SUID
+
+## Exemple Debian
+
+```bash
+find / -perm -u=s -type f 2>/dev/null
+```
+
+```
 /usr/bin/find
 /usr/bin/chsh
 /usr/bin/fusermount
@@ -69,30 +244,59 @@ joe@debian-privesc:~$ find / -perm -u=s -type f 2>/dev/null
 /usr/lib/spice-gtk/spice-client-glib-usb-acl-helper
 /usr/lib/dbus-1.0/dbus-daemon-launch-helper
 /usr/sbin/pppd
+```
 
-----------liste de capabilities sur OSPC C > Charlie (à priori rien en rapport)
+---
 
-sh-5.1$ getcap -r / 2> /dev/null
-getcap -r / 2> /dev/null
+# Capabilities
+
+Lister les capabilities :
+
+```bash
+getcap -r / 2>/dev/null
+```
+
+## Exemple OSPC C / Charlie
+
+```
 /usr/bin/mtr-packet cap_net_raw=ep
 /usr/bin/ping cap_net_raw=ep
 /usr/lib/x86_64-linux-gnu/gstreamer1.0/gstreamer-1.0/gst-ptp-helper cap_net_bind_service,cap_net_admin=ep
 /snap/core20/1695/usr/bin/ping cap_net_raw=ep
 /snap/core20/1634/usr/bin/ping cap_net_raw=ep
------------liste capabilities sur
-Linux demo 5.15.0-52-generic #58 / Ubuntu Jammy 22.04
-$ getcap -r / 2>/dev/null
+```
+
+---
+
+## Exemple Ubuntu 22.04
+
+```
 /usr/bin/ping cap_net_raw=ep
 /usr/bin/mtr-packet cap_net_raw=ep
 /usr/lib/x86_64-linux-gnu/gstreamer1.0/gstreamer-1.0/gst-ptp-helper cap_net_bind_service,cap_net_admin=ep
 /snap/core20/1695/usr/bin/ping cap_net_raw=ep
 /snap/core20/1623/usr/bin/ping cap_net_raw=ep
+```
 
+---
 
+# SUID Ubuntu 16.04
 
------------SUID sur Ubuntu 16.04 Kernel 4.4.0-116 generic (140 sur ubuntu) - RAS dans la liste, même si pkexec est (tjs) présent, c'était sa version qui était vulnérable
+Kernel :
 
-joe@ubuntu-privesc:~$ find / -perm -u=s -type f 2>/dev/null
+```
+4.4.0-116-generic
+```
+
+Command :
+
+```bash
+find / -perm -u=s -type f 2>/dev/null
+```
+
+Résultat :
+
+```
 /usr/lib/snapd/snap-confine
 /usr/lib/policykit-1/polkit-agent-helper-1
 /usr/lib/eject/dmcrypt-get-device
@@ -116,76 +320,85 @@ joe@ubuntu-privesc:~$ find / -perm -u=s -type f 2>/dev/null
 /bin/mount
 /bin/umount
 /bin/ping6
+```
 
-SUID-SGID Ubuntu 22.04 Kernel Linux version 5.15.0-52-generic
+Note : `pkexec` présent mais dépend de la version vulnérable.
 
-══════════╣ SUID - Check easy privesc, exploits and write perms
-╚ https://book.hacktricks.wiki/en/linux-hardening/privilege-escalation/index.html#sudo-and-suid
--rwsr-xr-x 1 root root 44K Mar 14  2022 /usr/bin/chsh
--rwsr-xr-x 1 root root 31K Feb 26  2022 /usr/bin/pkexec  --->  Linux4.10_to_5.1.17(CVE-2019-13272)/rhel_6(CVE-2011-1485)/Generic_CVE-2021-4034
--rwsr-xr-x 1 root root 47K Feb 21  2022 /usr/bin/mount  --->  Apple_Mac_OSX(Lion)_Kernel_xnu-1699.32.7_except_xnu-1699.24.8
--rwsr-xr-x 1 root root 72K Mar 14  2022 /usr/bin/chfn  --->  SuSE_9.3/10
--rwsr-xr-x 1 root root 55K Feb 21  2022 /usr/bin/su
--rwsr-xr-x 1 root root 59K Mar 14  2022 /usr/bin/passwd  --->  Apple_Mac_OSX(03-2006)/Solaris_8/9(12-2004)/SPARC_8/9/Sun_Solaris_2.3_to_2.5.1(02-1997)
--rwsr-xr-x 1 root root 40K Mar 14  2022 /usr/bin/newgrp  --->  HP-UX_10.20
--rwsr-xr-x 1 root root 35K Feb 21  2022 /usr/bin/umount  --->  BSD/Linux(08-1996)
--rwsr-xr-x 1 root root 35K Mar 23  2022 /usr/bin/fusermount3
--rwsr-xr-x 1 root root 71K Mar 14  2022 /usr/bin/gpasswd
--rwsr-xr-x 1 root root 227K Feb 14  2022 /usr/bin/sudo  --->  check_if_the_sudo_version_is_vulnerable
--rwsr-xr-x 1 root root 19K Feb 26  2022 /usr/libexec/polkit-agent-helper-1
--rwsr-xr-- 1 root messagebus 35K Apr  1  2022 /usr/lib/dbus-1.0/dbus-daemon-launch-helper
--rwsr-xr-x 1 root root 331K Feb 25  2022 /usr/lib/openssh/ssh-keysign
--rwsr-xr-x 1 root root 136K Aug  8  2022 /usr/lib/snapd/snap-confine  --->  Ubuntu_snapd<2.37_dirty_sock_Local_Privilege_Escalation(CVE-2019-7304)
--rwsr-xr-x 1 root root 84K Mar 14  2022 /snap/core20/1695/usr/bin/chfn  --->  SuSE_9.3/10
--rwsr-xr-x 1 root root 52K Mar 14  2022 /snap/core20/1695/usr/bin/chsh
--rwsr-xr-x 1 root root 87K Mar 14  2022 /snap/core20/1695/usr/bin/gpasswd
--rwsr-xr-x 1 root root 55K Feb  7  2022 /snap/core20/1695/usr/bin/mount  --->  Apple_Mac_OSX(Lion)_Kernel_xnu-1699.32.7_except_xnu-1699.24.8
--rwsr-xr-x 1 root root 44K Mar 14  2022 /snap/core20/1695/usr/bin/newgrp  --->  HP-UX_10.20
--rwsr-xr-x 1 root root 67K Mar 14  2022 /snap/core20/1695/usr/bin/passwd  --->  Apple_Mac_OSX(03-2006)/Solaris_8/9(12-2004)/SPARC_8/9/Sun_Solaris_2.3_to_2.5.1(02-1997)
--rwsr-xr-x 1 root root 67K Feb  7  2022 /snap/core20/1695/usr/bin/su
--rwsr-xr-x 1 root root 163K Jan 19  2021 /snap/core20/1695/usr/bin/sudo  --->  check_if_the_sudo_version_is_vulnerable
--rwsr-xr-x 1 root root 39K Feb  7  2022 /snap/core20/1695/usr/bin/umount  --->  BSD/Linux(08-1996)
--rwsr-xr-- 1 root systemd-resolve 51K Oct 25  2022 /snap/core20/1695/usr/lib/dbus-1.0/dbus-daemon-launch-helper
--rwsr-xr-x 1 root root 463K Mar 30  2022 /snap/core20/1695/usr/lib/openssh/ssh-keysign
--rwsr-xr-x 1 root root 84K Mar 14  2022 /snap/core20/1623/usr/bin/chfn  --->  SuSE_9.3/10
--rwsr-xr-x 1 root root 52K Mar 14  2022 /snap/core20/1623/usr/bin/chsh
--rwsr-xr-x 1 root root 87K Mar 14  2022 /snap/core20/1623/usr/bin/gpasswd
--rwsr-xr-x 1 root root 55K Feb  7  2022 /snap/core20/1623/usr/bin/mount  --->  Apple_Mac_OSX(Lion)_Kernel_xnu-1699.32.7_except_xnu-1699.24.8
--rwsr-xr-x 1 root root 44K Mar 14  2022 /snap/core20/1623/usr/bin/newgrp  --->  HP-UX_10.20
--rwsr-xr-x 1 root root 67K Mar 14  2022 /snap/core20/1623/usr/bin/passwd  --->  Apple_Mac_OSX(03-2006)/Solaris_8/9(12-2004)/SPARC_8/9/Sun_Solaris_2.3_to_2.5.1(02-1997)
--rwsr-xr-x 1 root root 67K Feb  7  2022 /snap/core20/1623/usr/bin/su
--rwsr-xr-x 1 root root 163K Jan 19  2021 /snap/core20/1623/usr/bin/sudo  --->  check_if_the_sudo_version_is_vulnerable
--rwsr-xr-x 1 root root 39K Feb  7  2022 /snap/core20/1623/usr/bin/umount  --->  BSD/Linux(08-1996)
--rwsr-xr-- 1 root systemd-resolve 51K Apr 29  2022 /snap/core20/1623/usr/lib/dbus-1.0/dbus-daemon-launch-helper
--rwsr-xr-x 1 root root 463K Mar 30  2022 /snap/core20/1623/usr/lib/openssh/ssh-keysign
--rwsr-xr-x 1 root root 121K Sep 29  2022 /snap/snapd/17336/usr/lib/snapd/snap-confine  --->  Ubuntu_snapd<2.37_dirty_sock_Local_Privilege_Escalation(CVE-2019-7304)
--rwsr-xr-x 1 root root 121K Sep  2  2022 /snap/snapd/17029/usr/lib/snapd/snap-confine  --->  Ubuntu_snapd<2.37_dirty_sock_Local_Privilege_Escalation(CVE-2019-7304)
- 
-╔══════════╣ SGID
-╚ https://book.hacktricks.wiki/en/linux-hardening/privilege-escalation/index.html#sudo-and-suid
--rwxr-sr-x 1 root shadow 23K Mar 24  2022 /usr/sbin/pam_extrausers_chkpwd
--rwxr-sr-x 1 root shadow 27K Mar 24  2022 /usr/sbin/unix_chkpwd
--rwxr-sr-x 1 root _ssh 287K Feb 25  2022 /usr/bin/ssh-agent
--rwxr-sr-x 1 root tty 23K Feb 21  2022 /usr/bin/write.ul (Unknown SGID binary)
--rwxr-sr-x 1 root shadow 23K Mar 14  2022 /usr/bin/expiry
--rwxr-sr-x 1 root crontab 39K Mar 23  2022 /usr/bin/crontab
--rwxr-sr-x 1 root tty 23K Feb 21  2022 /usr/bin/wall
--rwxr-sr-x 1 root shadow 71K Mar 14  2022 /usr/bin/chage
--rwxr-sr-x 1 root utmp 15K Mar 24  2022 /usr/lib/x86_64-linux-gnu/utempter/utempter
--rwxr-sr-x 1 root shadow 83K Mar 14  2022 /snap/core20/1695/usr/bin/chage
--rwxr-sr-x 1 root shadow 31K Mar 14  2022 /snap/core20/1695/usr/bin/expiry
--rwxr-sr-x 1 root systemd-timesync 343K Mar 30  2022 /snap/core20/1695/usr/bin/ssh-agent
--rwxr-sr-x 1 root tty 35K Feb  7  2022 /snap/core20/1695/usr/bin/wall
--rwxr-sr-x 1 root shadow 43K Sep 17  2021 /snap/core20/1695/usr/sbin/pam_extrausers_chkpwd
--rwxr-sr-x 1 root shadow 43K Sep 17  2021 /snap/core20/1695/usr/sbin/unix_chkpwd
--rwxr-sr-x 1 root shadow 83K Mar 14  2022 /snap/core20/1623/usr/bin/chage
--rwxr-sr-x 1 root shadow 31K Mar 14  2022 /snap/core20/1623/usr/bin/expiry
--rwxr-sr-x 1 root systemd-timesync 343K Mar 30  2022 /snap/core20/1623/usr/bin/ssh-agent
--rwxr-sr-x 1 root tty 35K Feb  7  2022 /snap/core20/1623/usr/bin/wall
--rwxr-sr-x 1 root shadow 43K Sep 17  2021 /snap/core20/1623/usr/sbin/pam_extrausers_chkpwd
--rwxr-sr-x 1 root shadow 43K Sep 17  2021 /snap/core20/1623/usr/sbin/unix_chkpwd
+---
 
+# SUID / SGID Ubuntu 22.04
 
+Kernel :
 
+```
+5.15.0-52-generic
+```
 
+## SUID
 
+```
+-rwsr-xr-x /usr/bin/chsh
+-rwsr-xr-x /usr/bin/pkexec
+-rwsr-xr-x /usr/bin/mount
+-rwsr-xr-x /usr/bin/chfn
+-rwsr-xr-x /usr/bin/su
+-rwsr-xr-x /usr/bin/passwd
+-rwsr-xr-x /usr/bin/newgrp
+-rwsr-xr-x /usr/bin/umount
+-rwsr-xr-x /usr/bin/fusermount3
+-rwsr-xr-x /usr/bin/gpasswd
+-rwsr-xr-x /usr/bin/sudo
+-rwsr-xr-x /usr/libexec/polkit-agent-helper-1
+-rwsr-xr-- /usr/lib/dbus-1.0/dbus-daemon-launch-helper
+-rwsr-xr-x /usr/lib/openssh/ssh-keysign
+-rwsr-xr-x /usr/lib/snapd/snap-confine
+```
+
+Exemples d'exploits connus :
+
+- **pkexec** → CVE-2021-4034
+- **snap-confine** → CVE-2019-7304 (Dirty Sock)
+
+---
+
+## SGID
+
+```
+-rwxr-sr-x /usr/sbin/pam_extrausers_chkpwd
+-rwxr-sr-x /usr/sbin/unix_chkpwd
+-rwxr-sr-x /usr/bin/ssh-agent
+-rwxr-sr-x /usr/bin/write.ul
+-rwxr-sr-x /usr/bin/expiry
+-rwxr-sr-x /usr/bin/crontab
+-rwxr-sr-x /usr/bin/wall
+-rwxr-sr-x /usr/bin/chage
+-rwxr-sr-x /usr/lib/x86_64-linux-gnu/utempter/utempter
+```
+
+---
+
+# Rappels importants
+
+Toujours vérifier :
+
+- Version du **kernel**
+- Version de **sudo**
+- Version de **pkexec**
+- Fichiers **SUID**
+- **Capabilities**
+- **Cron jobs**
+- Répertoires **writable**
+- **PATH hijacking**
+- **Services systemd**
+- **Modules kernel**
+
+---
+
+# Outils utiles
+
+| Outil | Description |
+|------|-------------|
+| LinPEAS | Script d'énumération privesc |
+| unix-privesc-check | Vérification automatisée |
+| GTFOBins | Exploitation des binaires |
+| HackTricks | Documentation offensive |
